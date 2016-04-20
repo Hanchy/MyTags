@@ -125,30 +125,89 @@ def invert_zeros(img):
                 img[i, j] = 1
 
 
+def is_saddle(matrix):
+    counter = 0
+    # print(matrix.shape)
+    for i in xrange(matrix.shape[0]):
+        for j in xrange(matrix.shape[1]):
+            if matrix[i, j] > 127:
+                counter = counter + 1
+            else:
+                counter = counter - 1
+    print(counter, 0.3 * matrix.size)
+    if np.abs(counter) < 0.3 * matrix.size:
+        return True
+    else:
+        return False
+
+
+def detect_lines(matrix):
+    if matrix.shape[0] == 0 or matrix.shape[1] == 0:
+        return
+
+    lines = cv2.HoughLinesP(matrix, 1, np.pi / 180, 100, 20, 100)
+    if lines is not None:
+        print(lines)
+    # for x1, y1, x2, y2 in lines[0]:
+    #     cv2.line(img, (x1, y1), (x2, y2), (0, 0, 255), 2)
+    return lines
+
+
 if __name__ == '__main__':
-    img = cv2.imread("/home/fans/Pictures/kinect_chessboard.png")
-    #gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    # reval, corners = cv2.findChessboardCorners(gray, (8, 10), None)
-    # print(corners.shape)
-    # criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.1)
+    cap = cv2.VideoCapture(0)
+    while True:
+        ret, img = cap.read()
+        gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        gray = cv2.equalizeHist(gray_img)
+        horizontal_grad = cv2.Scharr(gray_img, cv2.CV_32F, 1, 0)
+        vertical_grad = cv2.Scharr(gray_img, cv2.CV_32F, 0, 1)  # , ksize=3)
+        gradient = np.sqrt(np.power(horizontal_grad, 2) +
+                           np.power(vertical_grad, 2))
+        _, th = cv2.threshold(gradient, 200, 255, cv2.THRESH_BINARY)
+        # binary = local_thresholding(th)
+        kernel = np.ones((3, 3), np.uint8)
+        dilated = cv2.dilate(th, kernel, 1)
+        erosion = cv2.erode(dilated, kernel, iterations=1)
+        closed = cv2.morphologyEx(erosion, cv2.MORPH_CLOSE, kernel, iterations=1)
+        thinned = thinning.guo_hall_thinning(closed.astype(np.uint8))
+        #_, binary = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)
+        edges = cv2.Canny(gray, 50, 150, apertureSize=3)
 
-    # objp = np.zeros((8 * 10, 3), np.float32)
-    # objp[:, :2] = np.mgrid[0:8, 0:10].T.reshape(-1, 2)
+        lines = cv2.HoughLinesP(thinned, 1, np.pi / 180, 100, 5)
+        if lines is not None:
+            for x1, y1, x2, y2 in lines[0]:
+                cv2.line(img, (x1, y1), (x2, y2), (0, 0, 255), 2)
 
-    # objpoints = []
-    # imgpoints = []
+        corners = cv2.goodFeaturesToTrack(gray, 10, 0.01, 25)
 
-    # if reval == True:
-    #     # objpoints.append(objp)
-    #     corners = cv2.cornerSubPix(gray, corners, (21, 21), (-1, -1), criteria)
-    #     # imgpoints.append(corners2)
-    #
-    #     # img = cv2.drawChessboardCorners(img, (8, 10), corners, reval)
-    #     print(corners.shape)
-    #     for i in xrange(80):
-    #         # print(corners[i, 0])
-    #         cv2.circle(img, tuple(corners[i, 0]), 3, (0, 0, 255), -1)
-    #     print(img.shape)
-    #     cv2.imshow('img', img)
-    #     cv2.waitKey(0)
-    preprocessing(img)
+        corners = np.float32(corners)
+
+        # print("corners", corners.shape)
+        for item in corners:
+            x, y = item[0]
+            cv2.circle(img, (x, y), 5, (0, 255, 0), -1)
+            # detect_lines(binary[x - 10:x + 11, y - 10:y + 11])
+            m = thinned[x - 10:x + 11, y - 10:y + 11].copy()
+            print(x, y, m.shape)
+            if m.shape[0] == 0 or m.shape[1] == 0:
+                continue
+            detect_lines(m)
+            # cv2.imshow("b", m)
+            # cv2.waitKey(100)
+            # if lines is not None:
+            # for rho, theta in lines[0]:
+            #     a = np.cos(theta)
+            #     b = np.sin(theta)
+            #     x0 = a * rho
+            #     y0 = b * rho
+            #     x1 = int(x0 + 1000 * (-b))
+            #     y1 = int(y0 + 1000 * (a))
+            #     x2 = int(x0 - 1000 * (-b))
+            #     y2 = int(y0 - 1000 * (a))
+            #     cv2.line(img, (x1, y1), (x2, y2), (0, 0, 255), 2)
+            # if is_saddle(binary[x - 10:x + 11, y - 10:y + 11]):
+            #     cv2.circle(img, (x, y), 3, (0, 0, 255), -1)
+        cv2.imshow("features", img)
+        cv2.imshow("binary", thinned)
+        if (cv2.waitKey(0) == 27):
+            continue

@@ -127,28 +127,4 @@ def invert_zeros(img):
 
 if __name__ == '__main__':
     img = cv2.imread("/home/fans/Pictures/kinect_chessboard.png")
-    #gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    # reval, corners = cv2.findChessboardCorners(gray, (8, 10), None)
-    # print(corners.shape)
-    # criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.1)
-
-    # objp = np.zeros((8 * 10, 3), np.float32)
-    # objp[:, :2] = np.mgrid[0:8, 0:10].T.reshape(-1, 2)
-
-    # objpoints = []
-    # imgpoints = []
-
-    # if reval == True:
-    #     # objpoints.append(objp)
-    #     corners = cv2.cornerSubPix(gray, corners, (21, 21), (-1, -1), criteria)
-    #     # imgpoints.append(corners2)
-    #
-    #     # img = cv2.drawChessboardCorners(img, (8, 10), corners, reval)
-    #     print(corners.shape)
-    #     for i in xrange(80):
-    #         # print(corners[i, 0])
-    #         cv2.circle(img, tuple(corners[i, 0]), 3, (0, 0, 255), -1)
-    #     print(img.shape)
-    #     cv2.imshow('img', img)
-    #     cv2.waitKey(0)
-    preprocessing(img)
+    gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
