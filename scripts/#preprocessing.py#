@@ -1,0 +1,154 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+from __future__ import print_function
+
+import cv2
+import numpy as np
+import thinning
+from matplotlib import pyplot as plt
+
+
+def whether_true(matrix):
+    # counter = 0.0
+    center = matrix[int(matrix.shape[0] / 2.0),
+                    int(matrix.shape[1] / 2.0)]
+    max_ele = np.max(matrix)
+    min_ele = np.min(matrix)
+    length = max_ele - min_ele
+    #print("[%d, %d]", [center, length])
+    if center > 0.3 * length:
+        return True
+    else:
+        return False
+    # for i in xrange(matrix.shape[0]):
+    #     for j in xrange(matrix.shape[1]):
+    #         if center > matrix[i, j]:
+    #             counter = counter + 1.0
+    #
+    # if counter / matrix.size > 0.5:
+    #     return True
+    # else:
+    #     return False
+
+
+def local_thresholding(img):
+    binary = np.zeros(img.shape, np.uint8)
+    tau = 4
+    for i in xrange(tau, img.shape[0]):
+        for j in xrange(tau, img.shape[1]):
+            thresh = whether_true(img[i - tau:i + tau + 1, j - tau:j + tau + 1])
+            binary[i, j] = thresh
+    return binary
+
+
+def preprocessing(img):
+    gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    gray_img = cv2.equalizeHist(gray_img)
+    horizontal_grad = cv2.Scharr(gray_img, cv2.CV_32F, 1, 0)
+    vertical_grad = cv2.Scharr(gray_img, cv2.CV_32F, 0, 1)  # , ksize=3)
+    gradient = np.sqrt(np.power(horizontal_grad, 2) +
+                       np.power(vertical_grad, 2))
+    _, th = cv2.threshold(gradient, 200, 255, cv2.THRESH_BINARY)
+    binary = local_thresholding(th)
+    kernel = np.ones((3, 3), np.uint8)
+    dilated = cv2.dilate(binary, kernel, 1)
+    erosion = cv2.erode(dilated, kernel, iterations=2)
+    closed = cv2.morphologyEx(erosion, cv2.MORPH_CLOSE, kernel, iterations=1)
+    thinned = thinning.guo_hall_thinning(closed.astype(np.uint8))
+
+    contours, hierarchy = cv2.findContours(thinned.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    contours2 = []
+    # arc_lengths = []
+    for ele in contours:
+        if len(ele) > 2:
+            retval = cv2.arcLength(ele, False)
+            # arc_lengths.append(retval)
+            if retval > 160:
+                contours2.append(ele)
+
+    trimmed_binary = np.zeros(gray_img.shape, np.uint8)
+    cv2.drawContours(trimmed_binary, contours2, -1, (255, 255, 255), 1)
+    potential_corners = []
+    for i in xrange(1, trimmed_binary.shape[0] - 1):
+        for j in xrange(1, trimmed_binary.shape[1] - 1):
+            if trimmed_binary[i, j] > 200:
+                counter = 0
+                if trimmed_binary[i - 1, j - 1] > 200:
+                    counter = counter + 1
+                if trimmed_binary[i - 1, j + 1] > 200:
+                    counter = counter + 1
+                if trimmed_binary[i + 1, j - 1] > 200:
+                    counter = counter + 1
+                if trimmed_binary[i + 1, j + 1] > 200:
+                    counter = counter + 1
+                if trimmed_binary[i, j + 1] > 200:
+                    counter = counter + 1
+                if trimmed_binary[i, j - 1] > 200:
+                    counter = counter + 1
+                if trimmed_binary[i + 1, j] > 200:
+                    counter = counter + 1
+                if trimmed_binary[i - 1, j] > 200:
+                    counter = counter + 1
+                if counter > 2:
+                    potential_corners.append([j, i])
+    p_corners = np.array(potential_corners)
+    for ele in p_corners:
+        cv2.circle(img, tuple(ele), 2, (0, 0, 255), 2)
+
+    plt.subplot(2, 2, 1)
+    plt.imshow(img, cmap='gray')
+    plt.subplot(2, 2, 2)
+    plt.imshow(thinned, cmap='gray')
+    plt.subplot(2, 2, 3)
+    plt.imshow(trimmed_binary, cmap='gray')
+    plt.subplot(2, 2, 4)
+    plt.imshow(gradient, cmap='gray')
+    plt.show()
+
+
+def count_nonezeros(array):
+    count = 0
+    x = array.reshape(-1)
+    for i in xrange(x.size):
+        if np.fabs(x[i]) > 1e-2:
+            count = count + 1
+    return count
+
+
+def invert_zeros(img):
+    for i in xrange(1, img.shape[0] - 1):
+        for j in xrange(1, img.shape[1] - 1):
+            if np.fabs(img[i, j]) > 1e-3:
+                continue
+            count = count_nonezeros(img[i - 1:i + 2, j - 1:j + 2])
+            if count > 2:
+                img[i, j] = 1
+
+
+if __name__ == '__main__':
+    img = cv2.imread("/home/fans/Pictures/kinect_chessboard.png")
+    #gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # reval, corners = cv2.findChessboardCorners(gray, (8, 10), None)
+    # print(corners.shape)
+    # criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.1)
+
+    # objp = np.zeros((8 * 10, 3), np.float32)
+    # objp[:, :2] = np.mgrid[0:8, 0:10].T.reshape(-1, 2)
+
+    # objpoints = []
+    # imgpoints = []
+
+    # if reval == True:
+    #     # objpoints.append(objp)
+    #     corners = cv2.cornerSubPix(gray, corners, (21, 21), (-1, -1), criteria)
+    #     # imgpoints.append(corners2)
+    #
+    #     # img = cv2.drawChessboardCorners(img, (8, 10), corners, reval)
+    #     print(corners.shape)
+    #     for i in xrange(80):
+    #         # print(corners[i, 0])
+    #         cv2.circle(img, tuple(corners[i, 0]), 3, (0, 0, 255), -1)
+    #     print(img.shape)
+    #     cv2.imshow('img', img)
+    #     cv2.waitKey(0)
+    preprocessing(img)
