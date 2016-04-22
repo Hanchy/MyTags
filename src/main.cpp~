@@ -1,0 +1,61 @@
+#include <opencv2/opencv.hpp>
+#include <iostream>
+#include <csignal>
+
+static bool stop = false;
+void sigIntHandler(int signal) {
+  stop = true;
+}
+
+
+int main(int argc, char **argv) {
+  cv::VideoCapture cap(0);
+  if (!cap.isOpened())
+    return -1;
+
+  std::signal(SIGINT, sigIntHandler);
+  
+  cv::Mat img;
+  cv::Mat gray;
+  cv::Mat blurred;
+  cv::Mat rx, ry, rxx, rxy, ryx, ryy;
+  cv::Mat rxxryy, rxyryx;
+  cv::Mat S;
+  double s_min = 0.;
+  cv::Scalar color = cv::Scalar(0, 0, 255);
+  for (;!stop;) {
+    cap >> img;
+    cv::cvtColor(img, gray, CV_BGR2GRAY);
+    cv::equalizeHist(gray, gray);
+    cv::GaussianBlur(gray, blurred, cv::Size(5, 5), 1, 1);
+    cv::Scharr(blurred, rx, -1/CV_32F, 1, 0);
+    cv::Scharr(blurred, ry, -1/CV_32F, 0, 1);
+    cv::Scharr(rx, rxx, -1/CV_32F, 1, 0);
+    cv::Scharr(rx, rxy, -1/CV_32F, 0, 1);
+    cv::Scharr(ry, ryx, -1/CV_32F, 1, 0);
+    cv::Scharr(ry, ryy, -1/CV_32F, 0, 1);
+    cv::multiply(rxx, ryy, rxxryy, 1);
+    cv::multiply(rxy, ryx, rxyryx, 1);
+    cv::subtract(rxxryy, rxyryx, S);
+
+    cv::minMaxLoc(S, &s_min);
+    s_min *= 0.5;
+    std::cout << "s_min " << s_min << std::endl;
+    float *p = nullptr;
+    for (int r = 0; r < S.rows; ++r) {
+      p = S.ptr<float>(r);
+      for (int c = 0; c < S.cols; ++c) {
+        if (p[c] < s_min) {
+          cv::circle(img, cv::Point(c, r), 2, color);
+        }
+      }
+    }
+    cv::imshow("img", img);
+    if (cv::waitKey(10) == 27)
+      break;
+    
+  }
+  
+  
+  return 0;
+}
